@@ -1,0 +1,813 @@
+---
+title: "Explora tu equipo de fantasía de atletismo"
+author: "Estadistica computacional"
+date: "31/1/2022"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1) El atletismo necesita una nueva raza de scouts y managers
+
+El atletismo se remonta a los Juegos Olímpicos originales. Desde entonces, poco ha cambiado. Los atletas compiten como individuos, buscando lanzar lo más lejos, saltar lo más lejos (o lo más alto) y correr lo más rápido. Pero a la gente le gusta animar a los equipos, ondear pancartas y gritar como locos durante los partidos, llevar las camisetas de sus jugadores favoritos y mantenerse fiel a su equipo en las buenas y en las malas.
+
+¿Y si el atletismo fuera un deporte de equipo? Podría ser potencialmente más interesante y nos daría un nuevo conjunto de análisis deportivos que discutir. Incluso podríamos reducir los incentivos para hacer cosas desagradables en la búsqueda de altius, fortius y citius.
+
+Este conjunto de datos contiene resultados de atletas estadounidenses en los saltos horizontales (triple salto y salto de longitud) y los lanzamientos (lanzamiento de peso, disco, jabalina, martillo y peso). Leamos esto y examinemos la jabalina femenina.
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+# Cargar el paquete tidyverse
+# install.packages("tidyverse")
+library(tidyverse)
+# .... su codigo para la pregunta 1 ....
+
+# Importar el conjunto de datos completo
+library(readr)
+data <- read_csv("G:/Mi unidad/Maestria Estadistica Aplicada/Estadistica Computacional/proyecto final/datasets/athletics.csv")
+
+# Seleccionar los resultados de interés: jabalina femenina
+jabalina <- data%>%
+  filter(Event=="Javelin", Male_Female=="Female")
+ 
+# Hazte una idea de tus datos 
+# .... su codigo para la pregunta 1 ....
+```
+
+> Listado de Atletas
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+
+#listar la atletas
+jabalina%>%
+  select(Athlete)%>%
+  distinct(Athlete)%>%
+  arrange(Athlete)
+```
+
+> Eventos realizado en esta categoría
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+
+#listar la atletas
+jabalina%>%
+  select(Event, Male_Female, EventID)%>%
+  distinct(EventID)
+```
+
+> Las 5 Atletas que mas han participado en eventos
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+
+# las 5 atletas que mas han participado en eventos
+jabalina%>%
+  group_by(Athlete)%>%
+  count() %>%
+  arrange(desc(n))%>%
+  head(5)
+
+```
+
+## 2) Los managers adoran los datos ordenados
+
+Esta vista muestra los resultados de cada atleta en las competiciones individuales de atletismo. Los atletas tienen seis lanzamientos, pero en estos encuentros sólo importa uno, el más largo. Si todo lo que quisiéramos hacer fuera hablar de atletismo normal, tendríamos una tarea muy fácil: crear una nueva columna tomando el máximo de cada fila, organizar el marco de datos por esa columna en orden descendente y ya estaría.
+
+Pero nuestros managers tienen que hacer y saber mucho más que eso. Este es un deporte de estrategia, en el que cada lanzamiento importa. Los directivos necesitan un análisis más profundo para elegir sus equipos, elaborar su plan y tomar decisiones el día del partido.
+
+Primero tenemos que hacer que esta vista estándar "amplia" ordene los datos. No hemos terminado del todo con la vista amplia, pero los datos ordenados nos permitirán calcular nuestras estadísticas resumidas.
+
+```{r echo=FALSE}
+# Asignar los datos ordenados a javelin_long
+
+javelin_long <- jabalina%>%
+  select(Athlete, EventID, Flight1, Flight2, Flight3, Flight4, Flight5, Flight6)%>%
+  gather(key="Lanzamientos",value="Valor", -Athlete, -EventID) %>%
+  group_by(Athlete, EventID) %>%
+  summarise(maximo = max(Valor)) %>%
+  right_join(jabalina, by = c('Athlete', 'EventID'))%>%
+  arrange(desc(maximo))
+
+# javelin_long <- javelin_long[javelin_long$Valor >0,]
+# 
+# max_min <- javelin_long%>%
+#   group_by(Athlete, EventID)%>%
+#   summarise(maximo = max(Valor),
+#             minimo = min(Valor),
+#             prom_lanz_val = mean(Valor),
+#             sd = sd(Valor))
+# 
+# 
+
+#   
+# javelin_long <- max_min%>%
+#   left_join(validos, by = c("Athlete","EventID"))%>%
+#   arrange(Athlete, desc(maximo))
+  
+# Haz que flight sea numérico
+javelin_long <- javelin_long%>%
+  select(Athlete, EventID, maximo, Flight1, Flight2, Flight3, Flight4, Flight5, Flight6)%>%
+  rename("1"="Flight1","2"="Flight2","3"="Flight3","4"="Flight4","5"="Flight5","6"="Flight6")%>%
+    gather(key="Lanzamiento",value="Valor", -Athlete, -EventID, -maximo)
+  
+#javelin_long$Lanzamiento <- as.numeric(javelin_long$Lanzamiento)
+
+# Examinar las 6 primeras filas
+javelin_long%>%
+  head(6)
+
+# los 10 mejores lanzamientos de javalina femenina
+javelin_long%>%
+  top_n(10)%>%
+  arrange(desc(Valor))
+```
+
+## 3) Cada lanzamiento es importante
+
+Un lanzamiento es una falta si el atleta comete una infracción técnica durante el lanzamiento. En jabalina, la falta más común es sobrepasar la línea de lanzamiento. Tradicionalmente, el lanzamiento se puntúa como "F" y no tiene más importancia. Los atletas también pueden optar por pasar de un lanzamiento, que se puntúa con una "P", si están contentos con sus lanzamientos anteriores y quieren "reservarse" para más adelante.
+
+¿Recuerdas cuando decíamos que cada lanzamiento es importante? Aquí, el objetivo no es que cada jugador tenga un gran lanzamiento. Todos sus lanzamientos en cada prueba se suman, y el equipo con la mayor distancia total gana el punto. Las faltas se puntúan como 0 y los pases, bueno, su director y sus compañeros de equipo no estarían contentos.
+
+Aquí examinamos qué atletas cubren más distancia en cada uno de sus encuentros, junto con dos formas de hablar de su consistencia.
+
+```{r echo=FALSE}
+
+validos <- javelin_long[javelin_long$Valor >0,]%>%
+  group_by(Athlete, EventID)%>%
+  count()%>%
+  rename("Validos"="n")
+
+javelin_totals <- javelin_long %>%
+  group_by(Athlete, EventID)%>%
+  summarise(dis_total = sum(Valor),
+            promedio_lanz = mean(Valor),
+            sd = sd(Valor))%>%
+  left_join(validos, by = c("Athlete", "EventID"))%>%
+  arrange(Athlete, EventID)
+
+# Ver 10 filas de javelin_totals
+# .... su codigo para la pregunta 3 .... 
+head(javelin_totals,10)
+```
+
+## 4) Encuentre a los que se quedan en la cima de la clasificación
+
+En muchas competiciones de atletismo tradicionales, después de los tres primeros lanzamientos, los líderes del campo se reducen a los ocho mejores atletas (a veces más, a veces menos). Al igual que en la general, esto se basa únicamente en el mejor lanzamiento de esos tres primeros. 
+
+Damos la elección a los managers. De los tres atletas que comienzan cada prueba, el seleccionador elige a los dos que continuarán en los tres últimos lanzamientos. El seleccionador tendrá que saber qué jugadores tienden a animarse -o al menos a mantener su forma- en las últimas fases de un partido. También necesita saber si los tres primeros lanzamientos de un jugador son coherentes con su historial de juego. De lo contrario, podrían tomar una mala decisión sobre quién se queda basándose únicamente en la muestra que se está desarrollando delante de ellos.
+
+Por ahora, examinemos sólo nuestra estadística principal -la distancia total recorrida- para ver las diferencias entre las fases iniciales y finales del partido.
+
+```{r echo=FALSE}
+javelin <- javelin_long%>%
+  #filter(Lanzamiento<4)%>%
+  group_by(Athlete, EventID)%>%
+  summarise(fase_inicial = sum(Valor[Lanzamiento<4]), 
+            fase_final = sum(Valor[Lanzamiento>3]))%>%
+  mutate(diferencia = fase_final-fase_inicial)
+
+# Examinar las últimas diez filas
+tail(javelin, n=10)
+```
+
+## 5) Unir las piezas para una nueva mirada a los atletas
+
+Las estadísticas agregadas están en dos marcos de datos. Uniendo los dos, podemos echar un primer vistazo a la comparación de los atletas.
+
+```{r p_5, echo=FALSE}
+javelin_totals <- javelin_totals%>%
+  left_join(javelin, by=c("Athlete", "EventID"))%>%
+  group_by(Athlete)%>%
+  summarise(dis_total = median(dis_total),
+            sd = median(sd),
+            validos = median(Validos),
+            diferencia = median(diferencia))
+
+# Examinar las diez primeras filas
+head(javelin_totals, n=10)
+```
+
+## 6) Normalizar los datos para comparar las estadísticas
+
+Las cuatro estadísticas de resumen -distancia total, desviación estándar, número de lanzamientos exitosos y nuestra medida de temprano vs. tarde- están en diferentes escalas y miden cosas muy diferentes. Los directivos deben ser capaces de compararlas entre sí y luego sopesarlas en función de lo que sea más importante para su visión y estrategia para el equipo. Una simple normalización permitirá estas comparaciones.
+
+```{r p_6, echo=FALSE}
+normalizar <- function (resultado) {
+     (resultado - min(resultado)) / (max(resultado) - min(resultado))
+}
+
+aggstats <- c("TotalDistance", "StandardDev", "Success", "diff")
+
+M = length(javelin_totals$Athlete)
+javelin_norm <- data.frame(Athlete = javelin_totals$Athlete,
+                      TotalDistance = rep(NA, M),
+                      StandardDev = rep(NA, M),
+                      Success = rep(NA, M),
+                      diff = rep(NA, M))
+
+javelin_norm$TotalDistance <- normalizar(javelin_totals$dis_total)
+javelin_norm$StandardDev <- normalizar(javelin_totals$sd)
+javelin_norm$Success <- normalizar(javelin_totals$validos)
+javelin_norm$diff <- normalizar(javelin_totals$diferencia)
+
+javelin_norm%>%
+  arrange(desc(TotalDistance))%>%
+  head()
+```
+
+## 7) ¿Qué es lo que más importa a la hora de confeccionar la plantilla?
+
+Los managers tienen que decidir qué tipo de jugadores quieren en su equipo: quiénes coinciden con su visión, quiénes tienen las habilidades que necesitan para practicar su estilo de atletismo y, en última instancia, quiénes conseguirán las victorias. Un entrenador con aversión al riesgo querrá jugadores que rara vez cometan faltas. El entrenador con ojos de acero querrá a los jugadores que puedan conseguir la victoria con sus lanzamientos finales.
+
+Como en cualquier otro deporte (o profesión), rara vez un jugador será igual de fuerte en todas las áreas. Los managers tienen que hacer concesiones a la hora de seleccionar sus equipos. Nuestra primera tanda de entrenadores tiene la desventaja añadida de seleccionar a los jugadores basándose en los datos de un deporte relacionado pero distinto. Nuestros datos proceden de competiciones tradicionales de atletismo, donde las motivaciones y los objetivos son muy diferentes a los nuestros.
+
+Por eso los managers ganan mucho dinero y son despedidos cuando los resultados se van al garete.
+
+```{r p_7, echo=FALSE}
+manual = readline('¿Desea ponderar de forma manual? Elija S para Sí y N para No): ')
+
+if (manual == 'S' | manual == 's'){
+  print('Recuerde que la suma de las ponderaciones debe ser 100')
+  distancia = as.integer(readline('Ingrese su ponderacion para la distancia: '))
+  variabilidad = as.integer(readline('Ingrese su ponderacion para la variabilidad: '))
+  exitos = as.integer(readline('Ingrese su ponderacion para los exitos: '))
+  diferencia = as.integer(readline('Ingrese su ponderacion para la diferencia: '))
+} else {
+  print('La ponderacion sera aleatoria')
+  peso = c(0,0,0,0)
+  while (sum(peso) != 100){
+    peso[1] <- sample(0:100, 1)
+    if (sum(peso)==100) break
+    peso[2] <- sample(0:(100-sum(peso)), 1)
+    if (sum(peso)==100) break
+    peso[3] <- sample(0:(100-sum(peso)), 1)
+    if (sum(peso)==100) break
+    peso[4] <- 100-sum(peso)
+  }
+    distancia = peso[1]
+    variabilidad = peso[2]
+    exitos = peso[3]
+    diferencia = peso[4]
+}
+
+    cat("Peso de Equipo 
+    Home: Distancia: ", distancia, 
+         "Variabilidad: ", variabilidad,
+         "Exitos: ", exitos,
+         "Diferencia: ", diferencia)
+
+weights <- c(distancia, variabilidad, exitos, diferencia)
+
+javelin_team <- javelin_norm %>%
+  mutate(seleccion = (TotalDistance*distancia)+(StandardDev*variabilidad)+(Success*exitos)+(diff*diferencia))%>%
+  arrange(desc(seleccion))%>%
+  head(5)
+
+javelin_team
+```
+
+## 8) Conozca a sus jugadores
+
+¡Los datos han hablado! Ahora tenemos a nuestros cinco lanzadores de jabalina, pero todavía no los conocemos realmente. El marco de datos **javelin_totals** tiene los datos que se utilizaron en el proceso de decisión, así que los sacaremos. Esto nos da una idea de lo que cada uno aporta al equipo.
+
+También podemos ver cómo se comparan con el grupo de atletas del que partimos tomando la media y el máximo de cada estadística.
+
+```{r p_8, echo=FALSE}
+team_stats <- javelin_totals %>%
+  inner_join(javelin_team, by = "Athlete")%>%
+  arrange(desc(seleccion))
+
+pool_stats <- data.frame(do.call('cbind', 
+                                  sapply(javelin_totals,
+                                         function(x) if(is.numeric(x)) c(max(x), mean(x)))))
+pool_stats$MaxAve <- c("Maximum", "Average")
+pool_stats <- pool_stats %>%
+     gather(key="Statistic", value="Aggregate", -MaxAve)
+                    
+# Examinar las estadísticas del equipo
+poolteam_stats <- data.frame(do.call('cbind', 
+                                  sapply(team_stats%>%
+                                           select(Athlete, dis_total, sd, validos, diferencia),
+                                         function(x) if(is.numeric(x)) c(max(x), mean(x)))))
+poolteam_stats$MaxAve <- c("Maximum", "Promedio")
+poolteam_stats <- poolteam_stats %>%
+     gather(key="Statistic", value="Aggregate", -MaxAve)
+```
+
+## 9) Defiende tus argumentos ante la dirección del equipo
+
+El manager sabe lo que quiere del equipo y tiene los datos que respaldan sus decisiones, pero aún así tiene que defender sus decisiones ante los propietarios del equipo. Al fin y al cabo, son ellos los que extienden los cheques.
+
+Los propietarios son personas ocupadas. Muchos de ellos tienen otros trabajos y otras empresas. Confían en sus directivos, así que mientras el directivo pueda darles una presentación visual fácil de entender de por qué deberían fichar a estos cinco atletas de entre todos los demás, lo aprobarán.
+
+Una serie de gráficos que muestren cómo se compara cada atleta con el máximo y la media de cada estadística será suficiente para ellos.
+
+```{r p_9, echo=FALSE}
+library(gridExtra)
+
+
+vector_dis <- pool_stats%>%filter(Statistic=="dis_total")
+vector_sd <- pool_stats%>%filter(Statistic=="sd")
+vector_validos <- pool_stats%>%filter(Statistic=="validos")
+vector_diferencia <- pool_stats%>%filter(Statistic=="diferencia")
+
+p1 <- team_stats %>%
+  select(Athlete, dis_total, sd, validos, diferencia)%>%
+  gather(key="Statistic", value="Aggregate", -Athlete)%>%
+  filter(Athlete==team_stats$Athlete[1], Statistic=="dis_total")%>%
+  ggplot(.,aes(x=Statistic, weights=Aggregate))+
+  geom_bar()+
+  geom_hline(data=vector_dis, aes(yintercept=Aggregate,
+                                  group=Statistic, color=MaxAve), size=1) +
+  labs(title = team_stats$Athlete[1])+
+  scale_fill_hue(l=70) +
+  scale_color_hue(l=20) +
+  theme_minimal() +
+  theme(axis.text.x=element_text(), 
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        legend.position = "none")
+  
+p2 <- team_stats %>%
+  select(Athlete, dis_total, sd, validos, diferencia)%>%
+  gather(key="Statistic", value="Aggregate", -Athlete)%>%
+  filter(Athlete==team_stats$Athlete[1], Statistic=="sd")%>%
+  ggplot(.,aes(x=Statistic, weights=Aggregate))+
+  geom_bar()+
+  geom_hline(data=vector_sd, aes(yintercept=Aggregate,
+                                  group=Statistic, color=MaxAve), size=1) +
+  labs(title = "")+
+  scale_fill_hue(l=70) +
+  scale_color_hue(l=20) +
+  theme_minimal() +
+  theme(axis.text.x=element_text(), 
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        legend.position = "none")
+
+p3 <- team_stats %>%
+  select(Athlete, dis_total, sd, validos, diferencia)%>%
+  gather(key="Statistic", value="Aggregate", -Athlete)%>%
+  filter(Athlete==team_stats$Athlete[1], Statistic=="validos")%>%
+  ggplot(.,aes(x=Statistic, weights=Aggregate))+
+  geom_bar()+
+  geom_hline(data=vector_validos, aes(yintercept=Aggregate,
+                                  group=Statistic, color=MaxAve), size=1) +
+  labs(title = "")+
+  scale_fill_hue(l=70) +
+  scale_color_hue(l=20) +
+  theme_minimal() +
+  theme(axis.text.x=element_text(), 
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        legend.position = "none")
+
+p4 <- team_stats %>%
+  select(Athlete, dis_total, sd, validos, diferencia)%>%
+  gather(key="Statistic", value="Aggregate", -Athlete)%>%
+  filter(Athlete==team_stats$Athlete[1], Statistic=="diferencia")%>%
+  ggplot(.,aes(x=Statistic, weights=Aggregate))+
+  geom_bar()+
+  geom_hline(data=vector_diferencia, aes(yintercept=Aggregate,
+                                  group=Statistic, color=MaxAve), size=1) +
+  labs(title = '')+
+  scale_fill_hue(l=70) +
+  scale_color_hue(l=20) +
+  theme_minimal() +
+  theme(axis.text.x=element_text(), 
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank())
+
+p5 <- team_stats %>%
+  select(Athlete, dis_total, sd, validos, diferencia)%>%
+  gather(key="Statistic", value="Aggregate", -Athlete)%>%
+  filter(Athlete==team_stats$Athlete[2], Statistic=="dis_total")%>%
+  ggplot(.,aes(x=Statistic, weights=Aggregate))+
+  geom_bar()+
+  geom_hline(data=vector_dis, aes(yintercept=Aggregate,
+                                  group=Statistic, color=MaxAve), size=1) +
+  labs(title = team_stats$Athlete[2])+
+  scale_fill_hue(l=70) +
+  scale_color_hue(l=20) +
+  theme_minimal() +
+  theme(axis.text.x=element_text(), 
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        legend.position = "none")
+  
+p6 <- team_stats %>%
+  select(Athlete, dis_total, sd, validos, diferencia)%>%
+  gather(key="Statistic", value="Aggregate", -Athlete)%>%
+  filter(Athlete==team_stats$Athlete[2], Statistic=="sd")%>%
+  ggplot(.,aes(x=Statistic, weights=Aggregate))+
+  geom_bar()+
+  geom_hline(data=vector_sd, aes(yintercept=Aggregate,
+                                  group=Statistic, color=MaxAve), size=1) +
+  labs(title = '')+
+  scale_fill_hue(l=70) +
+  scale_color_hue(l=20) +
+  theme_minimal() +
+  theme(axis.text.x=element_text(), 
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        legend.position = "none")
+
+p7 <- team_stats %>%
+  select(Athlete, dis_total, sd, validos, diferencia)%>%
+  gather(key="Statistic", value="Aggregate", -Athlete)%>%
+  filter(Athlete==team_stats$Athlete[2], Statistic=="validos")%>%
+  ggplot(.,aes(x=Statistic, weights=Aggregate))+
+  geom_bar()+
+  geom_hline(data=vector_validos, aes(yintercept=Aggregate,
+                                  group=Statistic, color=MaxAve), size=1) +
+  labs(title = '')+
+  scale_fill_hue(l=70) +
+  scale_color_hue(l=20) +
+  theme_minimal() +
+  theme(axis.text.x=element_text(), 
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        legend.position = "none")
+
+p8 <- team_stats %>%
+  select(Athlete, dis_total, sd, validos, diferencia)%>%
+  gather(key="Statistic", value="Aggregate", -Athlete)%>%
+  filter(Athlete==team_stats$Athlete[2], Statistic=="diferencia")%>%
+  ggplot(.,aes(x=Statistic, weights=Aggregate))+
+  geom_bar()+
+  geom_hline(data=vector_diferencia, aes(yintercept=Aggregate,
+                                  group=Statistic, color=MaxAve), size=1) +
+  labs(title = '')+
+  scale_fill_hue(l=70) +
+  scale_color_hue(l=20) +
+  theme_minimal() +
+  theme(axis.text.x=element_text(), 
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank())
+
+p9 <- team_stats %>%
+  select(Athlete, dis_total, sd, validos, diferencia)%>%
+  gather(key="Statistic", value="Aggregate", -Athlete)%>%
+  filter(Athlete==team_stats$Athlete[3], Statistic=="dis_total")%>%
+  ggplot(.,aes(x=Statistic, weights=Aggregate))+
+  geom_bar()+
+  geom_hline(data=vector_dis, aes(yintercept=Aggregate,
+                                  group=Statistic, color=MaxAve), size=1) +
+  labs(title = team_stats$Athlete[3])+
+  scale_fill_hue(l=70) +
+  scale_color_hue(l=20) +
+  theme_minimal() +
+  theme(axis.text.x=element_text(), 
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        legend.position = "none")
+  
+p10 <- team_stats %>%
+  select(Athlete, dis_total, sd, validos, diferencia)%>%
+  gather(key="Statistic", value="Aggregate", -Athlete)%>%
+  filter(Athlete==team_stats$Athlete[3], Statistic=="sd")%>%
+  ggplot(.,aes(x=Statistic, weights=Aggregate))+
+  geom_bar()+
+  geom_hline(data=vector_sd, aes(yintercept=Aggregate,
+                                  group=Statistic, color=MaxAve), size=1) +
+  labs(title = '')+
+  scale_fill_hue(l=70) +
+  scale_color_hue(l=20) +
+  theme_minimal() +
+  theme(axis.text.x=element_text(), 
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        legend.position = "none")
+
+p11 <- team_stats %>%
+  select(Athlete, dis_total, sd, validos, diferencia)%>%
+  gather(key="Statistic", value="Aggregate", -Athlete)%>%
+  filter(Athlete==team_stats$Athlete[3], Statistic=="validos")%>%
+  ggplot(.,aes(x=Statistic, weights=Aggregate))+
+  geom_bar()+
+  geom_hline(data=vector_validos, aes(yintercept=Aggregate,
+                                  group=Statistic, color=MaxAve), size=1) +
+  labs(title = '')+
+  scale_fill_hue(l=70) +
+  scale_color_hue(l=20) +
+  theme_minimal() +
+  theme(axis.text.x=element_text(), 
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        legend.position = "none")
+
+p12 <- team_stats %>%
+  select(Athlete, dis_total, sd, validos, diferencia)%>%
+  gather(key="Statistic", value="Aggregate", -Athlete)%>%
+  filter(Athlete==team_stats$Athlete[3], Statistic=="diferencia")%>%
+  ggplot(.,aes(x=Statistic, weights=Aggregate))+
+  geom_bar()+
+  geom_hline(data=vector_diferencia, aes(yintercept=Aggregate,
+                                  group=Statistic, color=MaxAve), size=1) +
+  labs(title = '')+
+  scale_fill_hue(l=70) +
+  scale_color_hue(l=20) +
+  theme_minimal() +
+  theme(axis.text.x=element_text(), 
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank())
+
+p13 <- team_stats %>%
+  select(Athlete, dis_total, sd, validos, diferencia)%>%
+  gather(key="Statistic", value="Aggregate", -Athlete)%>%
+  filter(Athlete==team_stats$Athlete[4], Statistic=="dis_total")%>%
+  ggplot(.,aes(x=Statistic, weights=Aggregate))+
+  geom_bar()+
+  geom_hline(data=vector_dis, aes(yintercept=Aggregate,
+                                  group=Statistic, color=MaxAve), size=1) +
+  labs(title = team_stats$Athlete[4])+
+  scale_fill_hue(l=70) +
+  scale_color_hue(l=20) +
+  theme_minimal() +
+  theme(axis.text.x=element_text(), 
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        legend.position = "none")
+  
+p14 <- team_stats %>%
+  select(Athlete, dis_total, sd, validos, diferencia)%>%
+  gather(key="Statistic", value="Aggregate", -Athlete)%>%
+  filter(Athlete==team_stats$Athlete[4], Statistic=="sd")%>%
+  ggplot(.,aes(x=Statistic, weights=Aggregate))+
+  geom_bar()+
+  geom_hline(data=vector_sd, aes(yintercept=Aggregate,
+                                  group=Statistic, color=MaxAve), size=1) +
+  labs(title = '')+
+  scale_fill_hue(l=70) +
+  scale_color_hue(l=20) +
+  theme_minimal() +
+  theme(axis.text.x=element_text(), 
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        legend.position = "none")
+
+p15 <- team_stats %>%
+  select(Athlete, dis_total, sd, validos, diferencia)%>%
+  gather(key="Statistic", value="Aggregate", -Athlete)%>%
+  filter(Athlete==team_stats$Athlete[4], Statistic=="validos")%>%
+  ggplot(.,aes(x=Statistic, weights=Aggregate))+
+  geom_bar()+
+  geom_hline(data=vector_validos, aes(yintercept=Aggregate,
+                                  group=Statistic, color=MaxAve), size=1) +
+  labs(title = '')+
+  scale_fill_hue(l=70) +
+  scale_color_hue(l=20) +
+  theme_minimal() +
+  theme(axis.text.x=element_text(), 
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        legend.position = "none")
+
+p16 <- team_stats %>%
+  select(Athlete, dis_total, sd, validos, diferencia)%>%
+  gather(key="Statistic", value="Aggregate", -Athlete)%>%
+  filter(Athlete==team_stats$Athlete[4], Statistic=="diferencia")%>%
+  ggplot(.,aes(x=Statistic, weights=Aggregate))+
+  geom_bar()+
+  geom_hline(data=vector_diferencia, aes(yintercept=Aggregate,
+                                  group=Statistic, color=MaxAve), size=1) +
+  labs(title = '')+
+  scale_fill_hue(l=70) +
+  scale_color_hue(l=20) +
+  theme_minimal() +
+  theme(axis.text.x=element_text(), 
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank())
+
+
+p17 <- team_stats %>%
+  select(Athlete, dis_total, sd, validos, diferencia)%>%
+  gather(key="Statistic", value="Aggregate", -Athlete)%>%
+  filter(Athlete==team_stats$Athlete[5], Statistic=="dis_total")%>%
+  ggplot(.,aes(x=Statistic, weights=Aggregate))+
+  geom_bar()+
+  geom_hline(data=vector_dis, aes(yintercept=Aggregate,
+                                  group=Statistic, color=MaxAve), size=1) +
+  labs(title = team_stats$Athlete[5])+
+  scale_fill_hue(l=70) +
+  scale_color_hue(l=20) +
+  theme_minimal() +
+  theme(axis.text.x=element_text(), 
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        legend.position = "none")
+  
+p18 <- team_stats %>%
+  select(Athlete, dis_total, sd, validos, diferencia)%>%
+  gather(key="Statistic", value="Aggregate", -Athlete)%>%
+  filter(Athlete==team_stats$Athlete[5], Statistic=="sd")%>%
+  ggplot(.,aes(x=Statistic, weights=Aggregate))+
+  geom_bar()+
+  geom_hline(data=vector_sd, aes(yintercept=Aggregate,
+                                  group=Statistic, color=MaxAve), size=1) +
+  labs(title = '')+
+  scale_fill_hue(l=70) +
+  scale_color_hue(l=20) +
+  theme_minimal() +
+  theme(axis.text.x=element_text(), 
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        legend.position = "none")
+
+p19 <- team_stats %>%
+  select(Athlete, dis_total, sd, validos, diferencia)%>%
+  gather(key="Statistic", value="Aggregate", -Athlete)%>%
+  filter(Athlete==team_stats$Athlete[5], Statistic=="validos")%>%
+  ggplot(.,aes(x=Statistic, weights=Aggregate))+
+  geom_bar()+
+  geom_hline(data=vector_validos, aes(yintercept=Aggregate,
+                                  group=Statistic, color=MaxAve), size=1) +
+  labs(title = '')+
+  scale_fill_hue(l=70) +
+  scale_color_hue(l=20) +
+  theme_minimal() +
+  theme(axis.text.x=element_text(), 
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        legend.position = "none")
+
+p20 <- team_stats %>%
+  select(Athlete, dis_total, sd, validos, diferencia)%>%
+  gather(key="Statistic", value="Aggregate", -Athlete)%>%
+  filter(Athlete==team_stats$Athlete[5], Statistic=="diferencia")%>%
+  ggplot(.,aes(x=Statistic, weights=Aggregate))+
+  geom_bar()+
+  geom_hline(data=vector_diferencia, aes(yintercept=Aggregate,
+                                  group=Statistic, color=MaxAve), size=1) +
+  labs(title = '')+
+  scale_fill_hue(l=70) +
+  scale_color_hue(l=20) +
+  theme_minimal() +
+  theme(axis.text.x=element_text(), 
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank())
+
+lay <- rbind(c(1,2,3,4,4),
+             c(5,6,7,8,8))
+
+grid.arrange(arrangeGrob(grobs= list(p1,p2,p3,p4,p5,p6,p7,p8), layout_matrix = lay, vp = NULL, top = "Comparativo Atletas"))
+
+lay <- rbind(c(1,2,3,4,4),
+             c(5,6,7,8,8))
+
+grid.arrange(arrangeGrob(grobs= list(p9,p10,p11,p12,p13,p14,p15,p16), layout_matrix = lay, vp = NULL, top = "Comparativo Atletas"))
+
+lay <- rbind(c(1,2,3,4,4))
+
+grid.arrange(arrangeGrob(grobs= list(p17,p18,p19,p20), layout_matrix = lay, vp = NULL, top = "Comparativo Atletas"), heights = c(0.7,1))
+
+
+p <- team_stats %>% 
+  select(Athlete, dis_total, sd, validos, diferencia) %>%
+ gather(key="Statistic", value="Aggregate", -Athlete) %>% 
+ ggplot(aes(x=Athlete, y=Aggregate, fill=Athlete)) + 
+  geom_bar(stat="identity", position="dodge") + 
+  facet_wrap(vars(Statistic), scales="free_y") + 
+  geom_hline(data=pool_stats, aes(yintercept=Aggregate, group=Statistic, color=MaxAve), size=1) + 
+  labs(title="AnyTown Athletic Club: Women's Javelin", color="Athlete pool maximum / average") + 
+  scale_fill_hue(l=70) + 
+  scale_color_hue(l=20) + 
+  theme_minimal() + 
+  theme(axis.text.x=element_blank(), axis.title.x=element_blank(), axis.title.y=element_blank()) 
+
+p
+```
+
+/newpage
+
+## 10) Tiempo de lanzamiento
+
+Antes de que comience la temporada de atletismo, el director realizará análisis similares para los demás lanzamientos, los saltos y las pruebas de carrera. Luego jugará con diferentes permutaciones de su equipo y de su rival para llegar a la mejor alineación y tomar las mejores decisiones el día del partido. De momento, como es lo que mejor conocemos y casi no tenemos tiempo, vamos a simular un simple partido de jabalina.
+
+El ganador es el equipo que lanza la mayor distancia combinada: seis lanzamientos de cada uno de tus tres jugadores contra seis lanzamientos de cada uno de los tres jugadores del adversario.
+
+```{r p_10, echo=FALSE}
+# Ponderación y selección de nuestro equipo
+manual = readline('¿Desea ponderar de forma manual? Elija S para Sí y N para No): ')
+
+if (manual == 'S' | manual == 's'){
+  print('Recuerde que la suma de las ponderaciones debe ser 100')
+  distancia = as.integer(readline('Ingrese su ponderacion para la distancia: '))
+  variabilidad = as.integer(readline('Ingrese su ponderacion para la variabilidad: '))
+  exitos = as.integer(readline('Ingrese su ponderacion para los exitos: '))
+  diferencia = as.integer(readline('Ingrese su ponderacion para la diferencia: '))
+} else {
+  print('La ponderacion sera aleatoria')
+  peso = c(0,0,0,0)
+  while (sum(peso) != 100){
+    peso[1] <- sample(0:100, 1)
+    if (sum(peso)==100) break
+    peso[2] <- sample(0:(100-sum(peso)), 1)
+    if (sum(peso)==100) break
+    peso[3] <- sample(0:(100-sum(peso)), 1)
+    if (sum(peso)==100) break
+    peso[4] <- 100-sum(peso)
+  }
+    distancia = peso[1]
+    variabilidad = peso[2]
+    exitos = peso[3]
+    diferencia = peso[4]
+}
+
+    cat("Peso de Equipo 
+    Home: Distancia: ", distancia, 
+         "Variabilidad: ", variabilidad,
+         "Exitos: ", exitos,
+         "Diferencia: ", diferencia)
+
+
+weights <- c(distancia, variabilidad, exitos, diferencia)
+
+javelin_team <- javelin_norm %>%
+  mutate(seleccion = (TotalDistance*distancia)+(StandardDev*variabilidad)+(Success*exitos)+(diff*diferencia))%>%
+  arrange(desc(seleccion))%>%
+  head(5)
+
+
+# Ponderación del equipo visitante
+
+manual = readline('¿Desea ponderar de forma manual? Elija S para Sí y N para No): ')
+
+if (manual == 'S' | manual == 's'){
+  print('Recuerde que la suma de las ponderaciones debe ser 100')
+  distancia1 = as.integer(readline('Ingrese su ponderacion para la distancia: '))
+  variabilidad1 = as.integer(readline('Ingrese su ponderacion para la variabilidad: '))
+  exitos1 = as.integer(readline('Ingrese su ponderacion para los exitos: '))
+  diferencia1 = as.integer(readline('Ingrese su ponderacion para la diferencia: '))
+} else {
+  print('La ponderacion sera aleatoria')
+  peso = c(0,0,0,0)
+  while (sum(peso) != 100){
+    peso[1] <- sample(0:100, 1)
+    if (sum(peso)==100) break
+    peso[2] <- sample(0:(100-sum(peso)), 1)
+    if (sum(peso)==100) break
+    peso[3] <- sample(0:(100-sum(peso)), 1)
+    if (sum(peso)==100) break
+    peso[4] <- 100-sum(peso)
+  }
+    distancia1 = peso[1]
+    variabilidad1 = peso[2]
+    exitos1 = peso[3]
+    diferencia1 = peso[4]
+}
+
+    cat("Peso de Equipo 
+    Home: Distancia: ", distancia1, 
+         "Variabilidad: ", variabilidad1,
+         "Exitos: ", exitos1,
+         "Diferencia: ", diferencia1)
+    
+weights <- c(distancia1, variabilidad1, exitos1, diferencia1)
+
+javelin_team_away <- javelin_norm %>%
+  mutate(seleccion = (TotalDistance*distancia1)+(StandardDev*variabilidad1)+(Success*exitos1)+(diff*diferencia1))%>%
+  arrange(desc(seleccion))%>%
+  #anti_join(javelin_team, by = "Athlete")%>%
+  head(5)
+
+
+# Simulación del partido
+
+home <- sample(1:nrow(javelin_team), 3, replace=FALSE)
+home <- javelin_team[home,]
+home_dis = 0
+
+away <- sample(1:nrow(javelin_team_away), 3, replace=FALSE)
+away <- javelin_team_away[away,]
+away_dis = 0
+
+for (i in 1:nrow(home)) {
+  lanz_validos <- round(home$Success[i]*6)
+
+HomeTeam <- javelin_long%>%
+  filter(Athlete == home$Athlete[i], Valor>0)%>%
+  summarise(min = min(Valor),
+            max = max(Valor))
+
+home_dis <- home_dis + sum(sample(HomeTeam$min:HomeTeam$max, lanz_validos, replace = T))
+
+ lanz_validos_a <- round(away$Success[i]*6)
+
+AwayTeam <- javelin_long%>%
+  filter(Athlete == away$Athlete[i], Valor>0)%>%
+  summarise(min = min(Valor),
+            max = max(Valor))
+
+away_dis <- away_dis + sum(sample(AwayTeam$min:AwayTeam$max, lanz_validos_a, replace = T))
+}
+
+print(home)
+print(away)
+print(paste0("Javelin match, Final Score: Home: ", home_dis, " - Away: ", away_dis))
+ifelse(home_dis > away_dis, print("Win!"), print("Sometimes you just have to take the L."))
+```
+
